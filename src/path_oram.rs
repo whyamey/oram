@@ -237,6 +237,44 @@ impl<V: OramBlock, const Z: BucketSize, const AB: BlockSize> PathOram<V, Z, AB> 
         })
     }
 
+    /// Returns height.
+    pub fn height(&self) -> u64 {
+        self.height
+    }
+
+    /// Performs an oblivious access with Reverse Lexicographic (deterministic) eviction.
+    pub fn deterministic_access<R: Rng + CryptoRng, F: Fn(&V) -> V>(
+        &mut self,
+        address: Address,
+        callback: F,
+        eviction_path: impl CompleteBinaryTreeIndex + Into<u64> + Copy,
+        rng: &mut R,
+    ) -> Result<V, OramError> {
+        if address > self.block_capacity()? {
+            return Err(OramError::AddressOutOfBoundsError {
+                attempted: address,
+                capacity: self.block_capacity()?,
+            });
+        }
+
+        let new_position = eviction_path;
+        let data_path = self.position_map.write(address, new_position.into(), rng)?;
+
+        self.stash
+            .read_from_path(&mut self.physical_memory, data_path)?;
+        let result = self.stash.access(address, new_position.into(), callback);
+        self.stash
+            .write_to_path(&mut self.physical_memory, data_path)?;
+
+        let evict_idx: u64 = eviction_path.into();
+        self.stash
+            .read_from_path(&mut self.physical_memory, evict_idx)?;
+        self.stash
+            .write_to_path(&mut self.physical_memory, evict_idx)?;
+
+        result
+    }
+
     #[cfg(test)]
     pub(crate) fn stash_occupancy(&self) -> StashSize {
         self.stash.occupancy()

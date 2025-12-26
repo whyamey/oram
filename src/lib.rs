@@ -102,7 +102,7 @@ pub(crate) mod position_map;
 pub(crate) mod stash;
 #[cfg(test)]
 mod test_utils;
-pub(crate) mod utils;
+pub mod utils;
 
 pub use crate::bucket::BlockValue;
 pub use crate::path_oram::DefaultOram;

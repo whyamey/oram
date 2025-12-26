@@ -13,10 +13,10 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeGreater, ConstantTimeL
 
 use std::num::TryFromIntError;
 
-pub(crate) type TreeIndex = u64;
-pub(crate) type TreeHeight = u64;
+pub type TreeIndex = u64;
+pub type TreeHeight = u64;
 
-pub(crate) trait CompleteBinaryTreeIndex
+pub trait CompleteBinaryTreeIndex
 where
     Self: Sized,
 {
