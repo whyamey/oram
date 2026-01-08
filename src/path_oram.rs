@@ -220,13 +220,19 @@ impl<V: OramBlock, const Z: BucketSize, const AB: BlockSize> PathOram<V, Z, AB> 
         } else {
             block_capacity / ab_address + 1
         };
+        let linear_map = match &mut position_map {
+            crate::position_map::PositionMap::Base(l) => l,
+            _ => unreachable!("Recursion cutoff is u64::MAX, so map must be linear"),
+        };
+
         for block_index in 0..num_address_blocks {
             let mut data: [u64; AB] = [0; AB];
             for address in &mut data {
                 *address = rng.gen_range(first_leaf_index..=last_leaf_index);
             }
             let position_block = PositionBlock { data };
-            position_map.write_position_block(block_index * ab_address, position_block, rng)?;
+
+            linear_map.physical_memory[block_index as usize] = position_block;
         }
 
         Ok(Self {
@@ -248,7 +254,7 @@ impl<V: OramBlock, const Z: BucketSize, const AB: BlockSize> PathOram<V, Z, AB> 
         address: Address,
         callback: F,
         eviction_path: impl CompleteBinaryTreeIndex + Into<u64> + Copy,
-        rng: &mut R,
+        _rng: &mut R,
     ) -> Result<V, OramError> {
         if address > self.block_capacity()? {
             return Err(OramError::AddressOutOfBoundsError {
@@ -258,7 +264,22 @@ impl<V: OramBlock, const Z: BucketSize, const AB: BlockSize> PathOram<V, Z, AB> 
         }
 
         let new_position = eviction_path;
-        let data_path = self.position_map.write(address, new_position.into(), rng)?;
+
+        let linear_oram = match &mut self.position_map {
+            PositionMap::Base(l) => l,
+            _ => unreachable!("Recursion cutoff is u64::MAX, so map must be linear"),
+        };
+
+        let ab_val = AB as u64;
+        let block_idx = (address / ab_val) as usize;
+        let offset_idx = (address % ab_val) as usize;
+
+        let mut block = linear_oram.physical_memory[block_idx];
+
+        let old_position = block.data[offset_idx];
+        block.data[offset_idx] = new_position.into();
+        linear_oram.physical_memory[block_idx] = block;
+        let data_path = old_position;
 
         self.stash
             .read_from_path(&mut self.physical_memory, data_path)?;
